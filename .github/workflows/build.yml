@@ -15,6 +15,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # ================= BUILD =================
       - name: Build
         id: build
         run: |
@@ -27,12 +28,12 @@ jobs:
           echo "===== BUILD LOG ====="
           tail -n 100 build.log
 
-      - name: Install Python Dependencies
+      - name: Install Python Dependencies (Build)
         if: steps.build.outcome == 'failure'
         run: |
           pip install google-generativeai
 
-      - name: Gemini Analysis
+      - name: Gemini Build Analysis
         if: steps.build.outcome == 'failure'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -40,10 +41,7 @@ jobs:
           python scripts/analyze_build.py
 
 
-      # =========================
-      # 🔥 ADD DEPLOY SECTION HERE
-      # =========================
-
+      # ================= DEPLOY =================
       - name: Simulated Deploy
         id: deploy
         run: |
@@ -70,9 +68,9 @@ jobs:
           python scripts/analyze_deploy.py
 
 
-      # =========================
-
-      - name: Fail Workflow
+      # ================= FINAL STATUS =================
+      - name: Check Pipeline Status
         if: steps.build.outcome == 'failure' || steps.deploy.outcome == 'failure'
         run: |
+          echo "Pipeline failed due to errors in build or deploy."
           exit 1
