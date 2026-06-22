@@ -17,13 +17,33 @@ jobs:
 
       - name: Build
         id: build
-        run: mvn clean package
+        run: |
+          mvn clean package > build.log 2>&1
         continue-on-error: true
 
-      - name: Analyze Failure
+      - name: Show Build Log
+        if: steps.build.outcome == 'failure'
+        run: cat build.log
+
+      - name: Gemini Analysis
         if: steps.build.outcome == 'failure'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          mvn clean package > build.log 2>&1 || true
-          python3 scripts/analyze_build.py
+          LOG=$(tail -n 50 build.log)
+
+          curl -s \
+          -H "Content-Type: application/json" \
+          -X POST \
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+          -d "{
+            \"contents\": [{
+              \"parts\": [{
+                \"text\": \"Analyze this Maven build failure. Give root cause and fix:\n$LOG\"
+              }]
+            }]
+          }"
+
+      - name: Fail Workflow
+        if: steps.build.outcome == 'failure'
+        run: exit 1
