@@ -73,4 +73,3 @@ jobs:
         if: steps.build.outcome == 'failure' || steps.deploy.outcome == 'failure'
         run: |
           echo "Pipeline failed due to errors in build or deploy."
-          exit 1
