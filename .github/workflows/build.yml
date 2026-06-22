@@ -1,4 +1,4 @@
-name: AIOps Troubleshooter
+name: aiops-pipeline
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Build
         id: build
@@ -26,27 +26,47 @@ jobs:
           mvn clean package > build.log 2>&1
         continue-on-error: true
 
-      - name: Gemini Build Analysis
+      - name: Install Python Dependencies (Build)
         if: always()
         run: |
-          python scripts/gemini_build_analysis.py
+          python -m pip install --upgrade pip
+          pip install google-generativeai
+
+      - name: Gemini Build Analysis
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python scripts/analyze_build.py
 
       - name: Deploy to Render
         id: deploy
         if: steps.build.outcome == 'success'
         run: |
-          curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}" > deploy.log 2>&1
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" > deploy.log 2>&1
         continue-on-error: true
+
+      - name: Install Python Dependencies (Deploy)
+        if: always()
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-generativeai
 
       - name: Gemini Deploy Analysis
         if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python scripts/gemini_deploy_analysis.py
+          python scripts/analyze_deploy.py
 
       - name: Check Pipeline Status
         if: always()
         run: |
-          if [ "${{ steps.build.outcome }}" = "failure" ] || [ "${{ steps.deploy.outcome }}" = "failure" ]; then
+          echo "Build Outcome: ${{ steps.build.outcome }}"
+          echo "Deploy Outcome: ${{ steps.deploy.outcome }}"
+
+          if [ "${{ steps.build.outcome }}" = "failure" ] || \
+             [ "${{ steps.deploy.outcome }}" = "failure" ]; then
             echo "Pipeline failed due to build/deploy errors."
             exit 1
           fi
