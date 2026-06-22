@@ -1,75 +1,54 @@
-name: AI Build Analysis
+name: AIOps Troubleshooter
 
 on:
   push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build:
+  aiops-pipeline:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
-      # ================= BUILD =================
       - name: Build
         id: build
         run: |
           mvn clean package > build.log 2>&1
         continue-on-error: true
 
-      - name: Show Build Log
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "===== BUILD LOG ====="
-          tail -n 100 build.log
-
-      - name: Install Python Dependencies (Build)
-        if: steps.build.outcome == 'failure'
-        run: |
-          pip install google-generativeai
-
       - name: Gemini Build Analysis
-        if: steps.build.outcome == 'failure'
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        if: always()
         run: |
-          python scripts/analyze_build.py
+          python scripts/gemini_build_analysis.py
 
-
-      # ================= DEPLOY =================
-      - name: Simulated Deploy
+      - name: Deploy to Render
         id: deploy
+        if: steps.build.outcome == 'success'
         run: |
-          echo "Error: Unable to access jarfile wrong.jar" > deploy.log
-          exit 1
+          curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}" > deploy.log 2>&1
         continue-on-error: true
 
-      - name: Show Deploy Log
-        if: steps.deploy.outcome == 'failure'
-        run: |
-          echo "===== DEPLOY LOG ====="
-          tail -n 100 deploy.log
-
-      - name: Install Python Dependencies (Deploy)
-        if: steps.deploy.outcome == 'failure'
-        run: |
-          pip install google-generativeai
-
       - name: Gemini Deploy Analysis
-        if: steps.deploy.outcome == 'failure'
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        if: always()
         run: |
-          python scripts/analyze_deploy.py
+          python scripts/gemini_deploy_analysis.py
 
-
-      # ================= FINAL STATUS =================
       - name: Check Pipeline Status
-        if: steps.build.outcome == 'failure' || steps.deploy.outcome == 'failure'
+        if: always()
         run: |
-          echo "Pipeline failed due to errors in build or deploy."
+          if [ "${{ steps.build.outcome }}" = "failure" ] || [ "${{ steps.deploy.outcome }}" = "failure" ]; then
+            echo "Pipeline failed due to build/deploy errors."
+            exit 1
+          fi
+
+          echo "Pipeline completed successfully."
