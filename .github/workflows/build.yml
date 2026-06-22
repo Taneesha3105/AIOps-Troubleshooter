@@ -20,13 +20,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Build
+      - name: Build Application
         id: build
         run: |
           mvn clean package > build.log 2>&1
         continue-on-error: true
 
-      - name: Install Python Dependencies (Build)
+      - name: Install Python Dependencies (Build Analysis)
         if: steps.build.outcome == 'failure'
         run: |
           python -m pip install --upgrade pip
@@ -43,10 +43,10 @@ jobs:
         id: deploy
         if: steps.build.outcome == 'success'
         run: |
-          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" > deploy.log 2>&1
+          curl --fail -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" > deploy.log 2>&1
         continue-on-error: true
 
-      - name: Install Python Dependencies (Deploy)
+      - name: Install Python Dependencies (Deploy Analysis)
         if: steps.deploy.outcome == 'failure'
         run: |
           python -m pip install --upgrade pip
