@@ -1,47 +1,45 @@
 name: AI Build Analysis
 
 on:
-push:
+  push:
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
+    steps:
+      - uses: actions/checkout@v4
 
-steps:
-  - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-  - uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: 17
+      - name: Build
+        id: build
+        run: |
+          mvn clean package > build.log 2>&1
+        continue-on-error: true
 
-  - name: Build
-    id: build
-    run: |
-      mvn clean package > build.log 2>&1
-    continue-on-error: true
+      - name: Show Build Log
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "===== BUILD LOG ====="
+          tail -n 100 build.log
 
-  - name: Show Build Log
-    if: steps.build.outcome == 'failure'
-    run: |
-      echo "===== BUILD LOG ====="
-      tail -n 100 build.log
+      - name: Install Python Dependencies
+        if: steps.build.outcome == 'failure'
+        run: |
+          pip install google-generativeai
 
-  - name: Install Python Dependencies
-    if: steps.build.outcome == 'failure'
-    run: |
-      pip install google-generativeai
+      - name: Gemini Analysis
+        if: steps.build.outcome == 'failure'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python scripts/analyze_build.py
 
-  - name: Gemini Analysis
-    if: steps.build.outcome == 'failure'
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-    run: |
-      python scripts/analyze_build.py
-
-  - name: Fail Workflow
-    if: steps.build.outcome == 'failure'
-    run: |
-      exit 1
-
+      - name: Fail Workflow
+        if: steps.build.outcome == 'failure'
+        run: |
+          exit 1
