@@ -39,7 +39,40 @@ jobs:
         run: |
           python scripts/analyze_build.py
 
+
+      # =========================
+      # 🔥 ADD DEPLOY SECTION HERE
+      # =========================
+
+      - name: Simulated Deploy
+        id: deploy
+        run: |
+          echo "Error: Unable to access jarfile wrong.jar" > deploy.log
+          exit 1
+        continue-on-error: true
+
+      - name: Show Deploy Log
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          echo "===== DEPLOY LOG ====="
+          tail -n 100 deploy.log
+
+      - name: Install Python Dependencies (Deploy)
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          pip install google-generativeai
+
+      - name: Gemini Deploy Analysis
+        if: steps.deploy.outcome == 'failure'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python scripts/analyze_deploy.py
+
+
+      # =========================
+
       - name: Fail Workflow
-        if: steps.build.outcome == 'failure'
+        if: steps.build.outcome == 'failure' || steps.deploy.outcome == 'failure'
         run: |
           exit 1
