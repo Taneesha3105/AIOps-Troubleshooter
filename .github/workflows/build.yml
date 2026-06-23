@@ -1,80 +1,91 @@
-name: aiops-pipeline
+import os
+import time
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+try:
+    import google.generativeai as genai
+except ImportError:
+    print("google-generativeai package not installed")
+    raise
 
-jobs:
-  aiops-pipeline:
-    runs-on: ubuntu-latest
+API_KEY = os.getenv("GEMINI_API_KEY")
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+if not API_KEY:
+    print("GEMINI_API_KEY not found")
+    exit(1)
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+genai.configure(api_key=API_KEY)
 
-      - name: Build Application
-        id: build
-        run: |
-          mvn clean package 2>&1 | tee build.log
-        continue-on-error: true
+try:
+    with open("build.log", "r", errors="ignore") as f:
+        lines = f.readlines()
 
-      - name: Install Python Dependencies (Build Analysis)
-        if: steps.build.outcome == 'failure'
-        run: |
-          python -m pip install --upgrade pip
-          pip install google-generativeai
-        continue-on-error: true
+    error_lines = [
+        line.strip()
+        for line in lines
+        if "[ERROR]" in line
+    ]
 
-      - name: Gemini Build Analysis
-        if: steps.build.outcome == 'failure'
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          python scripts/analyze_build.py || true
-        continue-on-error: true
+    if error_lines:
+        build_log = "\n".join(error_lines)
+    else:
+        build_log = "".join(lines[-100:])
 
-      - name: Stop Pipeline After Build Failure
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "Build failed. Gemini analysis completed."
-          exit 1
+except Exception as e:
+    print(f"Unable to read build.log: {e}")
+    exit(1)
 
-      - name: Deploy to Render
-        id: deploy
-        if: steps.build.outcome == 'success'
-        run: |
-          curl --fail -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" 2>&1 | tee deploy.log
-        continue-on-error: true
+prompt = f"""
+Analyze this Maven build failure.
 
-      - name: Install Python Dependencies (Deploy Analysis)
-        if: steps.deploy.outcome == 'failure'
-        run: |
-          python -m pip install --upgrade pip
-          pip install google-generativeai
-        continue-on-error: true
+Provide:
 
-      - name: Gemini Deploy Analysis
-        if: steps.deploy.outcome == 'failure'
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          python scripts/analyze_deploy.py || true
-        continue-on-error: true
+1. Root Cause
+2. File causing issue
+3. Exact Fix
+4. Corrected Code Snippet (if applicable)
 
-      - name: Stop Pipeline After Deploy Failure
-        if: steps.deploy.outcome == 'failure'
-        run: |
-          echo "Deploy failed. Gemini analysis completed."
-          exit 1
+Build Errors:
 
-      - name: Pipeline Success
-        run: |
-          echo "Build and Deploy completed successfully."
+{build_log}
+"""
+
+attempts = 3
+backoff = 2
+
+for attempt in range(1, attempts + 1):
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+
+        response = model.generate_content(
+            prompt,
+            request_options={"timeout": 30}
+        )
+
+        print("\n" + "=" * 60)
+        print("BUILD FAILURE ANALYSIS")
+        print("=" * 60)
+        print(response.text)
+        print("=" * 60)
+
+        exit(0)
+
+    except Exception as e:
+        msg = str(e)
+
+        print(f"Attempt {attempt} failed: {msg}")
+
+        transient = (
+            "high demand" in msg.lower()
+            or "resource exhausted" in msg.lower()
+            or "timeout" in msg.lower()
+            or "timed out" in msg.lower()
+            or "504" in msg
+        )
+
+        if transient and attempt < attempts:
+            time.sleep(backoff)
+            backoff *= 2
+            continue
+
+        print(msg)
+        exit(1)
