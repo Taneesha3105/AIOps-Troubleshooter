@@ -20,11 +20,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+
       - name: Build Application
         id: build
         run: |
-          mvn clean package > build.log 2>&1
+          mvn clean package > tee build.log
         continue-on-error: true
+        - name: Build Application
 
       - name: Install Python Dependencies (Build Analysis)
         if: steps.build.outcome == 'failure'
