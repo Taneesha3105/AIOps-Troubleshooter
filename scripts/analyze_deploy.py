@@ -43,7 +43,7 @@ backoff = 2
 
 for attempt in range(1, attempts + 1):
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         response = model.generate_content(
             prompt,
