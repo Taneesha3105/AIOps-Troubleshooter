@@ -15,10 +15,21 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# Read build log
 try:
     with open("build.log", "r", errors="ignore") as f:
-        build_log = f.read()[-5000:]
+        lines = f.readlines()
+
+    error_lines = [
+        line.strip()
+        for line in lines
+        if "[ERROR]" in line
+    ]
+
+    if error_lines:
+        build_log = "\n".join(error_lines)
+    else:
+        build_log = "".join(lines[-100:])
+
 except Exception as e:
     print(f"Unable to read build.log: {e}")
     exit(1)
@@ -27,11 +38,13 @@ prompt = f"""
 Analyze this Maven build failure.
 
 Provide:
+
 1. Root Cause
 2. File causing issue
-3. Suggested Fix
+3. Exact Fix
+4. Corrected Code Snippet (if applicable)
 
-Build Log:
+Build Errors:
 
 {build_log}
 """
@@ -48,9 +61,8 @@ for attempt in range(1, attempts + 1):
             request_options={"timeout": 30}
         )
 
-        print("\n")
-        print("=" * 60)
-        print("GEMINI ANALYSIS")
+        print("\n" + "=" * 60)
+        print("BUILD FAILURE ANALYSIS")
         print("=" * 60)
         print(response.text)
         print("=" * 60)
@@ -71,15 +83,9 @@ for attempt in range(1, attempts + 1):
         )
 
         if transient and attempt < attempts:
-            print(f"Retrying in {backoff} seconds...")
             time.sleep(backoff)
             backoff *= 2
             continue
 
-        print("\n")
-        print("=" * 60)
-        print("GEMINI ANALYSIS FAILED")
-        print("=" * 60)
         print(msg)
-        print("=" * 60)
         exit(1)
