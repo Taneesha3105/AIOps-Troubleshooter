@@ -41,6 +41,12 @@ jobs:
           python scripts/analyze_build.py || true
         continue-on-error: true
 
+      - name: Stop Pipeline After Build Failure
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "Build failed. Gemini analysis completed."
+          exit 1
+
       - name: Deploy to Render
         id: deploy
         if: steps.build.outcome == 'success'
@@ -63,20 +69,12 @@ jobs:
           python scripts/analyze_deploy.py || true
         continue-on-error: true
 
-      - name: Check Pipeline Status
-        if: always()
+      - name: Stop Pipeline After Deploy Failure
+        if: steps.deploy.outcome == 'failure'
         run: |
-          echo "Build Outcome: ${{ steps.build.outcome }}"
-          echo "Deploy Outcome: ${{ steps.deploy.outcome }}"
+          echo "Deploy failed. Gemini analysis completed."
+          exit 1
 
-          if [ "${{ steps.build.outcome }}" = "failure" ]; then
-            echo "Build failed."
-            exit 1
-          fi
-
-          if [ "${{ steps.deploy.outcome }}" = "failure" ]; then
-            echo "Deploy failed."
-            exit 1
-          fi
-
-          echo "Pipeline completed successfully."
+      - name: Pipeline Success
+        run: |
+          echo "Build and Deploy completed successfully."
