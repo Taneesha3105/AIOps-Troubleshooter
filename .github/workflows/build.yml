@@ -38,7 +38,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python scripts/analyze_build.py
+          python scripts/analyze_build.py || true
         continue-on-error: true
 
       - name: Deploy to Render
@@ -60,7 +60,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python scripts/analyze_deploy.py
+          python scripts/analyze_deploy.py || true
         continue-on-error: true
 
       - name: Check Pipeline Status
@@ -69,8 +69,13 @@ jobs:
           echo "Build Outcome: ${{ steps.build.outcome }}"
           echo "Deploy Outcome: ${{ steps.deploy.outcome }}"
 
-          if [ "${{ steps.build.outcome }}" = "failure" ] || [ "${{ steps.deploy.outcome }}" = "failure" ]; then
-            echo "Pipeline failed due to build/deploy errors."
+          if [ "${{ steps.build.outcome }}" = "failure" ]; then
+            echo "Build failed."
+            exit 1
+          fi
+
+          if [ "${{ steps.deploy.outcome }}" = "failure" ]; then
+            echo "Deploy failed."
             exit 1
           fi
 
