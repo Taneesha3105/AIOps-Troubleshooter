@@ -34,21 +34,29 @@ jobs:
 
   gemini-analysis:
     needs: build
-    if: needs.build.result == 'failure'
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
+      - name: Show Build Result
+        run: |
+          echo "Build Result = ${{ needs.build.result }}"
+
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
+        if: needs.build.result == 'failure'
         with:
           name: build-log
 
       - name: Install Python Dependencies
+        if: needs.build.result == 'failure'
         run: |
+          python -m pip install --upgrade pip
           pip install google-generativeai
 
       - name: Gemini Analysis
+        if: needs.build.result == 'failure'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
